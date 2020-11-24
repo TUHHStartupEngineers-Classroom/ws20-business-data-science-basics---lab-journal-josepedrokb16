@@ -52,3 +52,14 @@ hist(samples)
 ```
 
 When you knit this R Markdown document, you will see that the histogram is printed to the page, along with the R code. This document can be set up to hide the R code in the webpage, just delete the comment (hashtag) from the cold folding option in the yaml header up top. For purposes of letting yourself see the code, and me see the code, best to keep it the way that it is. You'll learn that all of these things and more can be customized in each R code block.
+
+
+```{r, eval = TRUE}
+numbers <- 1:1000
+
+# This will print the first 10 elements of the vector numbers
+numbers[1:10]
+
+# This will plot a histogram of 100 random elements of the vector numbers
+hist(sample(numbers, 100, replace = T))
+```
