@@ -68,15 +68,124 @@ hist(sample(numbers, 100, replace = T))
 
 ## Business Case
 
-The goal is to analyze the salse of bikes through stores in Germany. Data is organized as "sales by year" and "sales by year and product family".
+The goal is to analyze the sales of bikes through stores in Germany. Data is organized as "sales by location" and "sales by year and location".
 
-Bike sales data divided into multiple datasets. Entity-relationship diagrams describe and define the data models. They explain the logical structure of the database.
+Bike sales data divided into multiple data sets. Entity-relationship diagrams describe and define the data models. They explain the logical structure of the database.
 
-# Challenge
-
+## Challenge
+#importing data
 The first step is to import the necessary libraries
 
 ```{r, eval = TRUE}
 library(tidyverse)
 library(readxl)
+library(lubridate)
+```
+
+We then read all of the Excel files
+```{r, eval = TRUE}
+bikes_tbl <- read_excel(path = "DS_101/00_data/01_bike_sales/01_raw_data/bikes.xlsx")
+orderlines_tbl <- read_excel(path = "DS_101/00_data/01_bike_sales/01_raw_data/orderlines.xlsx")
+bikeshops <- read_excel(path = "DS_101/00_data/01_bike_sales/01_raw_data/bikeshops.xlsx")
+```
+
+# Data Organization
+The next step is to combine all of the tables into one concise table
+```{r, eval = TRUE}
+bike_orderlines_joined_tbl <- left_join(orderlines_tbl, bikes_tbl, by = c("product.id"="bike.id")) %>% left_join(bikeshops, by = c("customer.id" = "bikeshop.id"))
+glimpse(bike_orderlines_joined_tbl)
+```
+
+We now organize the data in the table to give us better insights
+
+```{r, eval = TRUE}
+bike_orderlines_wrangled_tbl <- bike_orderlines_joined_tbl %>%
+  separate(col = category,
+           into = c("category.1","category.2","category.3"),
+           sep = " - ") %>%
+  mutate(total.price = price*quantity) %>%
+  select(-...1, -gender) %>%
+  select(-ends_with(".id")) %>%
+  bind_cols(bike_orderlines_joined_tbl %>% select(order.id)) %>%
+  
+  select(order.id, contains("order"), contains("model"), contains("category"), price, quantity, total.price, everything()) %>%
+  rename(bikeshop = name) %>%
+  set_names(names(.) %>% str_replace_all("\\.","_"))
+glimpse(bike_orderlines_wrangled_tbl)
+```
+
+Now we have to separate the location column into city and State
+
+```{r, eval = TRUE}
+bike_orderlines_wrangled_tbl <- bike_orderlines_wrangled_tbl %>% separate(col = location,
+                                          into = c("City", "State"),
+                                          sep = ", ")
+```
+
+Now we analyze the above table based on sales per State
+
+```{r, eval = TRUE}
+sales_by_state_tbl <- bike_orderlines_wrangled_tbl %>%
+  select(State, total_price) %>%
+  group_by(State) %>%
+  summarise(sales = sum(total_price)) %>%
+  mutate(sales_text = scales::dollar(sales, big.mark = ".",
+                                     decimal.mark = ",",
+                                     prefix = "",
+                                     suffix = " €"))
+sales_by_state_tbl
+```
+# Data Visualization
+
+We now plot the data from the table to better visualize it
+
+```{r, eval = TRUE}
+sales_by_state_tbl %>%
+  ggplot(aes(x = State, y = sales)) + 
+  geom_col(fill = "#2DC6D6")  +
+  geom_smooth(method = "lm", se = FALSE) + 
+  scale_y_continuous(labels = scales::dollar_format(big.mark = ".", 
+                                                    decimal.mark = ",", 
+                                                    prefix = "", 
+                                                    suffix = " €")) + 
+  labs(title = "Revenue per State",
+       subtitle = "Upward Trend",
+       x = "",
+       y = "Revenue") +
+  theme(axis.text.x = element_text(angle=45, hjust = 1))
+
+```
+
+From the plot above, it is clear that the State where the revenue was bigger is North Rhine-Westphalia.
+
+We now move on to analyze the sales by location and year.
+We first create a new table containing only the important information. This new table should contain the year, revenue, and location.
+```{r, eval = TRUE}
+sales_by_location_year_tbl <- bike_orderlines_wrangled_tbl %>%
+  select(order_date, State, total_price) %>%
+  mutate(Year = year(order_date)) %>%
+  group_by(State, Year) %>%
+  summarise(sales = sum(total_price)) %>%
+  ungroup() %>%
+  mutate(sales_text = scales::dollar(sales, big.mark = ".",
+                                     decimal.mark = ",",
+                                     prefix = "",
+                                     suffix = " €"))
+glimpse(sales_by_location_year_tbl)
+  
+```
+
+We finally analyze the data with the help of column plots. There are 12 states with bike stores, meaning 12 plots.
+```{r, eval = TRUE}
+sales_by_location_year_tbl %>%
+  ggplot(aes(x = Year, y = sales, fill = State)) +
+  geom_col() + 
+  facet_wrap(~ State) + 
+  scale_y_continuous(labels = scales::dollar_format(big.mark = ".", 
+                                                    decimal.mark = ",", 
+                                                    prefix = "", 
+                                                    suffix = " €")) +
+  labs(title = "Revenue by year and main State",
+       fill = "Main category") + 
+  theme(axis.text.x = element_text(angle=45, hjust = 1))
 ```

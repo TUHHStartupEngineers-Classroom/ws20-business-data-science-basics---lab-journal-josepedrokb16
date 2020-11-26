@@ -454,12 +454,151 @@ hist(sample(numbers, 100, replace = T))</code></pre>
 <p>The goal is to analyze the salse of bikes through stores in Germany. Data is organized as “sales by year” and “sales by year and product family”.</p>
 <p>Bike sales data divided into multiple datasets. Entity-relationship diagrams describe and define the data models. They explain the logical structure of the database.</p>
 </div>
-</div>
-<div id="challenge" class="section level1">
-<h1><span class="header-section-number">5</span> Challenge</h1>
+<div id="challenge" class="section level2">
+<h2><span class="header-section-number">4.2</span> Challenge</h2>
 <p>The first step is to import the necessary libraries</p>
 <pre class="r"><code>library(tidyverse)
-library(readxl)</code></pre>
+library(readxl)
+library(lubridate)</code></pre>
+<p>We then read all of the Excel files</p>
+<pre class="r"><code>bikes_tbl &lt;- read_excel(path = &quot;DS_101/00_data/01_bike_sales/01_raw_data/bikes.xlsx&quot;)
+orderlines_tbl &lt;- read_excel(path = &quot;DS_101/00_data/01_bike_sales/01_raw_data/orderlines.xlsx&quot;)
+bikeshops &lt;- read_excel(path = &quot;DS_101/00_data/01_bike_sales/01_raw_data/bikeshops.xlsx&quot;)</code></pre>
+<p>The next step is to combine all of the tables into one concise table</p>
+<pre class="r"><code>bike_orderlines_joined_tbl &lt;- left_join(orderlines_tbl, bikes_tbl, by = c(&quot;product.id&quot;=&quot;bike.id&quot;)) %&gt;% left_join(bikeshops, by = c(&quot;customer.id&quot; = &quot;bikeshop.id&quot;))
+glimpse(bike_orderlines_joined_tbl)</code></pre>
+<pre><code>## Rows: 15,644
+## Columns: 19
+## $ ...1           &lt;chr&gt; &quot;1&quot;, &quot;2&quot;, &quot;3&quot;, &quot;4&quot;, &quot;5&quot;, &quot;6&quot;, &quot;7&quot;, &quot;8&quot;, &quot;9&quot;, &quot;10&quot;, &quot;11…
+## $ order.id       &lt;dbl&gt; 1, 1, 2, 2, 3, 3, 3, 3, 3, 4, 5, 5, 5, 5, 6, 6, 6, 6, …
+## $ order.line     &lt;dbl&gt; 1, 2, 1, 2, 1, 2, 3, 4, 5, 1, 1, 2, 3, 4, 1, 2, 3, 4, …
+## $ order.date     &lt;dttm&gt; 2015-01-07, 2015-01-07, 2015-01-10, 2015-01-10, 2015-…
+## $ customer.id    &lt;dbl&gt; 2, 2, 10, 10, 6, 6, 6, 6, 6, 22, 8, 8, 8, 8, 16, 16, 1…
+## $ product.id     &lt;dbl&gt; 2681, 2411, 2629, 2137, 2367, 1973, 2422, 2655, 2247, …
+## $ quantity       &lt;dbl&gt; 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, …
+## $ model          &lt;chr&gt; &quot;Spectral CF 7 WMN&quot;, &quot;Ultimate CF SLX Disc 8.0 ETAP&quot;, …
+## $ model.year     &lt;dbl&gt; 2021, 2020, 2021, 2019, 2020, 2020, 2020, 2021, 2020, …
+## $ frame.material &lt;chr&gt; &quot;carbon&quot;, &quot;carbon&quot;, &quot;carbon&quot;, &quot;carbon&quot;, &quot;aluminium&quot;, &quot;…
+## $ weight         &lt;dbl&gt; 13.80, 7.44, 14.06, 8.80, 11.50, 8.80, 8.20, 8.85, 14.…
+## $ price          &lt;dbl&gt; 3119, 5359, 2729, 1749, 1219, 1359, 2529, 1559, 3899, …
+## $ category       &lt;chr&gt; &quot;Mountain - Trail - Spectral&quot;, &quot;Road - Race - Ultimate…
+## $ gender         &lt;chr&gt; &quot;female&quot;, &quot;unisex&quot;, &quot;unisex&quot;, &quot;unisex&quot;, &quot;unisex&quot;, &quot;uni…
+## $ url            &lt;chr&gt; &quot;https://www.canyon.com/en-de/mountain-bikes/trail-bik…
+## $ name           &lt;chr&gt; &quot;AlexandeRad&quot;, &quot;AlexandeRad&quot;, &quot;WITT-RAD&quot;, &quot;WITT-RAD&quot;, …
+## $ location       &lt;chr&gt; &quot;Hamburg, Hamburg&quot;, &quot;Hamburg, Hamburg&quot;, &quot;Bremen, Breme…
+## $ lat            &lt;dbl&gt; 53.57532, 53.57532, 53.07379, 53.07379, 48.78234, 48.7…
+## $ lng            &lt;dbl&gt; 10.015340, 10.015340, 8.826754, 8.826754, 9.180819, 9.…</code></pre>
+<p>We now organize the data in the table to give us better insights</p>
+<pre class="r"><code>bike_orderlines_wrangled_tbl &lt;- bike_orderlines_joined_tbl %&gt;%
+  separate(col = category,
+           into = c(&quot;category.1&quot;,&quot;category.2&quot;,&quot;category.3&quot;),
+           sep = &quot; - &quot;) %&gt;%
+  mutate(total.price = price*quantity) %&gt;%
+  select(-...1, -gender) %&gt;%
+  select(-ends_with(&quot;.id&quot;)) %&gt;%
+  bind_cols(bike_orderlines_joined_tbl %&gt;% select(order.id)) %&gt;%
+  
+  select(order.id, contains(&quot;order&quot;), contains(&quot;model&quot;), contains(&quot;category&quot;), price, quantity, total.price, everything()) %&gt;%
+  rename(bikeshop = name) %&gt;%
+  set_names(names(.) %&gt;% str_replace_all(&quot;\\.&quot;,&quot;_&quot;))
+glimpse(bike_orderlines_wrangled_tbl)</code></pre>
+<pre><code>## Rows: 15,644
+## Columns: 18
+## $ order_id       &lt;dbl&gt; 1, 1, 2, 2, 3, 3, 3, 3, 3, 4, 5, 5, 5, 5, 6, 6, 6, 6, …
+## $ order_line     &lt;dbl&gt; 1, 2, 1, 2, 1, 2, 3, 4, 5, 1, 1, 2, 3, 4, 1, 2, 3, 4, …
+## $ order_date     &lt;dttm&gt; 2015-01-07, 2015-01-07, 2015-01-10, 2015-01-10, 2015-…
+## $ model          &lt;chr&gt; &quot;Spectral CF 7 WMN&quot;, &quot;Ultimate CF SLX Disc 8.0 ETAP&quot;, …
+## $ model_year     &lt;dbl&gt; 2021, 2020, 2021, 2019, 2020, 2020, 2020, 2021, 2020, …
+## $ category_1     &lt;chr&gt; &quot;Mountain&quot;, &quot;Road&quot;, &quot;Mountain&quot;, &quot;Road&quot;, &quot;Mountain&quot;, &quot;H…
+## $ category_2     &lt;chr&gt; &quot;Trail&quot;, &quot;Race&quot;, &quot;Trail&quot;, &quot;Triathlon Bike&quot;, &quot;Dirt Jump…
+## $ category_3     &lt;chr&gt; &quot;Spectral&quot;, &quot;Ultimate&quot;, &quot;Neuron&quot;, &quot;Speedmax&quot;, &quot;Stitche…
+## $ price          &lt;dbl&gt; 3119, 5359, 2729, 1749, 1219, 1359, 2529, 1559, 3899, …
+## $ quantity       &lt;dbl&gt; 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, …
+## $ total_price    &lt;dbl&gt; 3119, 5359, 2729, 1749, 1219, 1359, 2529, 1559, 3899, …
+## $ frame_material &lt;chr&gt; &quot;carbon&quot;, &quot;carbon&quot;, &quot;carbon&quot;, &quot;carbon&quot;, &quot;aluminium&quot;, &quot;…
+## $ weight         &lt;dbl&gt; 13.80, 7.44, 14.06, 8.80, 11.50, 8.80, 8.20, 8.85, 14.…
+## $ url            &lt;chr&gt; &quot;https://www.canyon.com/en-de/mountain-bikes/trail-bik…
+## $ bikeshop       &lt;chr&gt; &quot;AlexandeRad&quot;, &quot;AlexandeRad&quot;, &quot;WITT-RAD&quot;, &quot;WITT-RAD&quot;, …
+## $ location       &lt;chr&gt; &quot;Hamburg, Hamburg&quot;, &quot;Hamburg, Hamburg&quot;, &quot;Bremen, Breme…
+## $ lat            &lt;dbl&gt; 53.57532, 53.57532, 53.07379, 53.07379, 48.78234, 48.7…
+## $ lng            &lt;dbl&gt; 10.015340, 10.015340, 8.826754, 8.826754, 9.180819, 9.…</code></pre>
+<p>Now we have to separate the location column into city and State</p>
+<pre class="r"><code>bike_orderlines_wrangled_tbl &lt;- bike_orderlines_wrangled_tbl %&gt;% separate(col = location,
+                                          into = c(&quot;City&quot;, &quot;State&quot;),
+                                          sep = &quot;, &quot;)</code></pre>
+<p>Now we analyze the above table based on sales per State</p>
+<pre class="r"><code>sales_by_state_tbl &lt;- bike_orderlines_wrangled_tbl %&gt;%
+  select(State, total_price) %&gt;%
+  group_by(State) %&gt;%
+  summarise(sales = sum(total_price)) %&gt;%
+  mutate(sales_text = scales::dollar(sales, big.mark = &quot;.&quot;,
+                                     decimal.mark = &quot;,&quot;,
+                                     prefix = &quot;&quot;,
+                                     suffix = &quot; €&quot;))
+sales_by_state_tbl</code></pre>
+<pre><code>## # A tibble: 12 x 3
+##    State                            sales sales_text  
+##    &lt;chr&gt;                            &lt;dbl&gt; &lt;chr&gt;       
+##  1 Baden-Württemberg              6521090 6.521.090 € 
+##  2 Bavaria                        6742819 6.742.819 € 
+##  3 Berlin                         1128433 1.128.433 € 
+##  4 Bremen                        10653499 10.653.499 €
+##  5 Hamburg                        3874756 3.874.756 € 
+##  6 Hesse                          1558901 1.558.901 € 
+##  7 Lower Saxony                   4107115 4.107.115 € 
+##  8 Mecklenburg-Western Pomerania   618974 618.974 €   
+##  9 North Rhine-Westphalia        21200613 21.200.613 €
+## 10 Saxony                         2230245 2.230.245 € 
+## 11 Saxony-Anhalt                   569614 569.614 €   
+## 12 Schleswig-Holstein             3224749 3.224.749 €</code></pre>
+<p>We now plot the data from the table to better visualize it</p>
+<pre class="r"><code>sales_by_state_tbl %&gt;%
+  ggplot(aes(x = State, y = sales)) + 
+  geom_col(fill = &quot;#2DC6D6&quot;)  +
+  geom_smooth(method = &quot;lm&quot;, se = FALSE) + 
+  scale_y_continuous(labels = scales::dollar_format(big.mark = &quot;.&quot;, 
+                                                    decimal.mark = &quot;,&quot;, 
+                                                    prefix = &quot;&quot;, 
+                                                    suffix = &quot; €&quot;)) + 
+  labs(title = &quot;Revenue per State&quot;,
+       subtitle = &quot;Upward Trend&quot;,
+       x = &quot;&quot;,
+       y = &quot;Revenue&quot;) +
+  theme(axis.text.x = element_text(angle=45, hjust = 1))</code></pre>
+<p><img src="journal_files/figure-html/unnamed-chunk-9-1.png" width="672" /></p>
+<p>From the plot above, it is clear that the State where the revenue was bigger is North Rhine-Westphalia.</p>
+<p>We now move on to analyze the sales by location and year. We first create a new table containing only the important information. This new table should contain the year, revenue, and location.</p>
+<pre class="r"><code>sales_by_location_year_tbl &lt;- bike_orderlines_wrangled_tbl %&gt;%
+  select(order_date, State, total_price) %&gt;%
+  mutate(Year = year(order_date)) %&gt;%
+  group_by(State, Year) %&gt;%
+  summarise(sales = sum(total_price)) %&gt;%
+  ungroup() %&gt;%
+  mutate(sales_text = scales::dollar(sales, big.mark = &quot;.&quot;,
+                                     decimal.mark = &quot;,&quot;,
+                                     prefix = &quot;&quot;,
+                                     suffix = &quot; €&quot;))
+glimpse(sales_by_location_year_tbl)</code></pre>
+<pre><code>## Rows: 60
+## Columns: 4
+## $ State      &lt;chr&gt; &quot;Baden-Württemberg&quot;, &quot;Baden-Württemberg&quot;, &quot;Baden-Württembe…
+## $ Year       &lt;dbl&gt; 2015, 2016, 2017, 2018, 2019, 2015, 2016, 2017, 2018, 2019…
+## $ sales      &lt;dbl&gt; 1031924, 1561658, 1224152, 1114327, 1589029, 1301461, 1129…
+## $ sales_text &lt;chr&gt; &quot;1.031.924 €&quot;, &quot;1.561.658 €&quot;, &quot;1.224.152 €&quot;, &quot;1.114.327 €&quot;…</code></pre>
+<p>We finally analyze the data with the help of column plots. There are 12 states with bike stores, meaning 12 plots.</p>
+<pre class="r"><code>sales_by_location_year_tbl %&gt;%
+  ggplot(aes(x = Year, y = sales, fill = State)) +
+  geom_col() + 
+  facet_wrap(~ State) + 
+  scale_y_continuous(labels = scales::dollar_format(big.mark = &quot;.&quot;, 
+                                                    decimal.mark = &quot;,&quot;, 
+                                                    prefix = &quot;&quot;, 
+                                                    suffix = &quot; €&quot;)) +
+  labs(title = &quot;Revenue by year and main State&quot;,
+       fill = &quot;Main category&quot;) + 
+  theme(axis.text.x = element_text(angle=45, hjust = 1))</code></pre>
+<p><img src="journal_files/figure-html/unnamed-chunk-11-1.png" width="672" /></p>
+</div>
 </div>
 
 
