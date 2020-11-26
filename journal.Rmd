@@ -66,14 +66,13 @@ hist(sample(numbers, 100, replace = T))
 
 # Lab 2 - Intro to the tidyverse
 
-## Business Case
+## Business Case and Challenge
 
 The goal is to analyze the sales of bikes through stores in Germany. Data is organized as "sales by location" and "sales by year and location".
 
 Bike sales data divided into multiple data sets. Entity-relationship diagrams describe and define the data models. They explain the logical structure of the database.
 
-## Challenge
-#importing data
+##importing data
 The first step is to import the necessary libraries
 
 ```{r, eval = TRUE}
@@ -89,7 +88,7 @@ orderlines_tbl <- read_excel(path = "DS_101/00_data/01_bike_sales/01_raw_data/or
 bikeshops <- read_excel(path = "DS_101/00_data/01_bike_sales/01_raw_data/bikeshops.xlsx")
 ```
 
-# Data Organization
+## Data Organization
 The next step is to combine all of the tables into one concise table
 ```{r, eval = TRUE}
 bike_orderlines_joined_tbl <- left_join(orderlines_tbl, bikes_tbl, by = c("product.id"="bike.id")) %>% left_join(bikeshops, by = c("customer.id" = "bikeshop.id"))
@@ -135,7 +134,7 @@ sales_by_state_tbl <- bike_orderlines_wrangled_tbl %>%
                                      suffix = " €"))
 sales_by_state_tbl
 ```
-# Data Visualization
+## Data Visualization
 
 We now plot the data from the table to better visualize it
 
