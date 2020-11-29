@@ -64,7 +64,7 @@ numbers[1:10]
 hist(sample(numbers, 100, replace = T))
 ```
 
-# Lab 2 - Intro to the tidyverse
+# Challenge 2 - Intro to the tidyverse
 
 ## Business Case and Challenge
 
@@ -72,7 +72,7 @@ The goal is to analyze the sales of bikes through stores in Germany. Data is org
 
 Bike sales data divided into multiple data sets. Entity-relationship diagrams describe and define the data models. They explain the logical structure of the database.
 
-##importing data
+## Importing data
 The first step is to import the necessary libraries
 
 ```{r, eval = TRUE}
@@ -187,4 +187,110 @@ sales_by_location_year_tbl %>%
   labs(title = "Revenue by year and main State",
        fill = "Main category") + 
   theme(axis.text.x = element_text(angle=45, hjust = 1))
+```
+
+# Challenge 3 Data Acquisition
+
+## Getting Data from an Arbitrary API
+
+We need to get data via an API. For this example, I will be fetching data from a Brazilian API that provides information about car prices sold in Brazil
+
+```{r, eval = TRUE}
+# import the httr library
+library(httr)
+
+# request access the the Brazilian car API
+response <- GET("https://parallelum.com.br/fipe/api/v1/carros/marcas/39/modelos") %>%
+  # Go the the folder containing the Mercedes-Benz models
+  content(as = "text") %>% fromJSON() %>% .$modelos %>% as.tibble() %>% select(nome) %>%     rename("Mercedes Model" = nome)
+
+print(response, n = 10)
+
+
+```
+
+## Creating a Database from Canyon's Competitor
+We now scrape the website of one of the competitors of Canyon Rose Bikes. We create a small database that contains the model names, and the prices for at least one category.
+
+Let's first import all of the necessary libraries
+
+```{r, eval = TRUE}
+library(tidyverse) # Main Package - Loads dplyr, purrr, etc.
+library(rvest)     # HTML Hacking & Web Scraping
+library(xopen)     # Quickly opening URLs
+library(jsonlite)  # converts JSON files to R objects
+library(glue)      # concatenate strings
+library(stringi)   # character string/text processing
+
+```
+
+Now we read the html code from the website
+
+```{r, eval = TRUE}
+# provide the home URL and read it
+url_home          <- "https://www.rosebikes.de/"
+html_home <- read_html(url_home)
+```
+
+we then scrape the models of the bikes
+```{r, eval = TRUE}
+# Create a new table with the categories
+rose_bike_category <- html_home %>% 
+  # Go to the node where the category names are located
+  html_nodes(css = ".header-mobile-menu-item__title") %>% html_text() %>%
+  # Extract the unecessary symbols
+  str_extract(pattern = "(?<=\\n).*(?=\\n)") %>%
+  # slice the rows that don't have a category
+  as.tibble() %>% slice(3:11) %>%
+  # Create a new column for the specific category URLs
+  mutate(model_url = str_glue("{url_home}fahrräder/{value}"))
+
+rose_bike_category
+```
+
+The next step is to scrape the models of the first category "MTB" 
+```{r, eval = TRUE}
+# Create a new table with the products of the MTB category
+# We use the URL from the first row of the previous table
+rose_bike_models <- rose_bike_category$model_url[1]  %>% 
+  read_html() %>%
+  # Go to the node that contains the product name
+  html_nodes(css = ".catalog-category-bikes__title-text") %>% html_text() %>%
+  # Extract the unecessary characters
+  str_extract(pattern = "(?<=\\n).*(?=\\n)") %>%
+  as.tibble() %>%
+  rename("MTB Models" = value) 
+
+# Create a new column with an ID for future merging
+rose_bike_models$ID <- seq.int(nrow(rose_bike_models))
+rose_bike_models <- select(rose_bike_models, ID, "MTB Models")
+
+rose_bike_models
+
+```
+We now get a table with the prices of each MTB model 
+```{r, eval = TRUE}
+# We create a new table with the prices of the individual MTB bikes
+rose_bike_MTB_price <- rose_bike_category$model_url[1]  %>% 
+  read_html() %>%
+  # We go to the node containing the prices
+  html_nodes(css = ".catalog-category-bikes__price-title") %>% html_text() %>%
+  # We get rid of unecessary characters
+  stringr::str_extract(pattern = "(?<=ab ).*?(?=\\n)") %>%
+  as.tibble() %>%
+  rename("MTB Models Price" = value) 
+
+# We create a new column with bike IDs for future merging
+rose_bike_MTB_price$ID <- seq.int(nrow(rose_bike_models))
+rose_bike_MTB_price <- select(rose_bike_MTB_price, ID, "MTB Models Price")
+
+rose_bike_MTB_price
+
+```
+We finally join the two tables in one database
+```{r, eval = TRUE}
+# We merge the two tables based on the ID
+rose_bike <- rose_bike_models %>% left_join(rose_bike_MTB_price)
+
+rose_bike
 ```
