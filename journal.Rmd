@@ -279,7 +279,7 @@ rose_bike_MTB_price <- rose_bike_category$model_url[1]  %>%
   stringr::str_extract(pattern = "(?<=ab ).*?(?=\\n)") %>%
   as.tibble() %>%
   rename("MTB Models Price" = value) 
-
+ 
 # We create a new column with bike IDs for future merging
 rose_bike_MTB_price$ID <- seq.int(nrow(rose_bike_models))
 rose_bike_MTB_price <- select(rose_bike_MTB_price, ID, "MTB Models Price")
@@ -293,4 +293,250 @@ We finally join the two tables in one database
 rose_bike <- rose_bike_models %>% left_join(rose_bike_MTB_price)
 
 rose_bike
+```
+
+# Challenge 4 - Data Wrangling
+
+## Part 1 - Patent Dominance
+What US company / corporation has the most patents? List the 10 US companies with the most assigned/granted patents.
+
+We obtain data from the United States Patent and Trademark Office.
+The first data set to get is the one containing the assignees.
+
+```{r, eval = FALSE}
+# import the vroom library
+library(vroom)
+library(data.table)
+library(dplyr)
+# Get the assignee dataset
+# define the column names and types based on the Excel spreadsheet
+col_types <- list(
+  id = col_character(),
+  type = col_double(),
+  name_first = col_character(),
+  name_last = col_character(),
+  organization = col_character()
+
+)
+
+# import file patent.tsv
+assignee_tbl <- vroom(
+            file       = "assignee.tsv", 
+            delim      = "\t", 
+            col_types  = col_types,
+            na         = c("", "NA", "NULL")
+        )
+```
+For this project, we also need the name of the companies that issued the patent. These are not included in the first table. We must therefore download and import the table "patent_assignee.tsv" that contains the organization name. We will later link it to the "assignee.tsv" table by using the patent id.
+```{r, eval = FALSE}
+# Get the "patent_assignee" data set
+# define the column names and types based on the Excel spreadsheet
+col_types <- list(
+  patent_id = col_character(),
+  assignee_id = col_character(),
+  location_id = col_character()
+
+)
+
+# import file patent.tsv
+patent_assignee_tbl <- vroom(
+            file       = "patent_assignee.tsv", 
+            delim      = "\t", 
+            col_types  = col_types,
+            na         = c("", "NA", "NULL")
+        )
+```
+
+We now convert both tables to a data.table format and merge them based on the assignee Id.
+```{r, eval = FALSE}
+# convert the data frame format to the data.table format
+setDT(assignee_tbl)
+setDT(patent_assignee_tbl)
+
+# We rename the id column of the assignee_tbl, so that it has the same name as the assignee_id column in the patent_assignee_tbl. We also select only the important columns
+
+ assignee_tbl <- assignee_tbl[, .(assignee_id = id, type, organization)]
+
+```
+We now merge the two tables based on the same variable "assignee_id"
+```{r, eval = FALSE}
+# Create a new table by merging the existing tables through the commnon column "assignee_id"
+combined_patent_tbl <- assignee_tbl %>%
+  left_join(patent_assignee_tbl, by = "assignee_id")
+
+# We can extract only the two important columns of this table for this first analysis, namely the organization name and the patent ID columns
+org_pat_tbl_copy <- combined_patent_tbl
+org_pat_tbl <- combined_patent_tbl[, .(patent_id), by = organization]
+
+
+rm(assignee_tbl)
+rm(patent_assignee_tbl)
+```
+Now we can simply count the number of occurrencies of each organization name. This will give the number of patents issued by such organization.
+
+```{r, eval = FALSE}
+org_pat_tbl <- org_pat_tbl[!is.na(organization), .(number_of_patents = .N), by = organization]
+
+# we then arrange in decreasing format and select the top 10 companies with the most patents.
+top_10_pat_org <- org_pat_tbl %>% ungroup() %>% arrange(desc(number_of_patents)) %>% slice(1:10)
+
+write_rds(top_10_pat_org, "top_10_pat_org.rds")
+
+rm(org_pat_tbl)
+```
+
+we now display the results of the top 10 companies in terms of number of patents
+
+```{r, eval = TRUE}
+read_rds("top_10_pat_org.rds")
+```
+
+## Part 2 - Recent patent acitivity
+What US company had the most patents granted in 2019? List the top 10 companies with the most new granted patents for 2019.
+
+For this part of the challenge, we also need to load the data set "patent.tsv"
+```{r, eval = FALSE}
+# prepare column names and type
+col_types <- list(
+  id = col_character(),
+  type = col_character(),
+  number = col_character(),
+  country = col_character(),
+  date = col_date("%Y-%m-%d"),
+  abstract = col_character(),
+  title = col_character(),
+  kind = col_character(),
+  num_claims = col_double(),
+  filename = col_character(),
+  withdrawn = col_double()
+)
+
+# import dataset
+patent_tbl <- vroom(
+            file       = "patent.tsv", 
+            delim      = "\t", 
+            col_types  = col_types,
+            na         = c("", "NA", "NULL")
+        )
+```
+
+We can extract only the two most important columns for this part of the challenge: the "patent id" and the "date"
+
+```{r, eval = FALSE}
+# set table as data.table type
+patent_short_table <- patent_tbl %>% select(id,date)
+setDT(patent_short_table)
+rm(patent_tbl)
+# we rename the id column to use it as a key with the previous table
+
+patent_short_table <- patent_short_table[, .(patent_id = id, date)]
+
+# now we merge it with the previous combined table
+
+combined_patent_date_tbl <- combined_patent_tbl %>%
+  left_join(patent_short_table, by = "patent_id")
+
+# Now we select the rows that are valid and that were issued in the year 2019. We count the number of occurrences for these patents in 2019 for each organization. We finally order them and select the top 10
+
+combined_patent_date_tbl <- combined_patent_date_tbl[!is.na(date), .(patent_year = lubridate::year(date)), by = organization][
+  patent_year == 2019][!is.na(organization)
+    , .(num_patents_2019 = .N), by = organization
+  ][
+    order(num_patents_2019, decreasing = TRUE)
+  ][
+    1:10
+  ]
+
+write_rds(combined_patent_date_tbl, "num_patents_2019.rds")
+```
+
+we now print the results of the Top 10 companies with most patents in 2019.
+
+```{r, eval = TRUE}
+read_rds("num_patents_2019.rds")
+```
+
+## Part 3 -  Innovation in Tech: 
+What is the most innovative tech sector? For the top 10 companies (worldwide) with the most patents, what are the top 5 USPTO tech main classes?
+```{r, eval = FALSE}
+# for this part of the challenge, we are going to need another data set "uspc.tsv"
+# prepare column names and type
+col_types <- list(
+  uuid = col_character(),
+  patent_id = col_character(),
+  mainclass_id = col_character(),
+  subclass_id = col_character(),
+  sequence = col_double()
+
+)
+
+# import data set
+uspc_tbl <- vroom(
+            file       = "uspc.tsv", 
+            delim      = "\t", 
+            col_types  = col_types,
+            na         = c("", "NA", "NULL")
+        )
+```
+
+We now reference a copy of the merged table, done for the first step of this challenge. We build a table that contains the organization name, the patent_id and the mainclass_id.
+
+```{r, eval = FALSE}
+# set them as data.table
+setDT(uspc_tbl)
+setDT(org_pat_tbl_copy)
+
+# we first collect only the important part of the org_pat_tbl_copy table, namely the organization name and the patent_id.
+org_pat_tbl_copy <- org_pat_tbl_copy[!is.na(location_id), .(patent_id, organization)]
+
+# we now filter the uspc table to get just the patent_id and the mainclass_id
+
+uspc_pat_main_id_tbl <- uspc_tbl[, .(patent_id, mainclass_id)]
+
+```
+
+We now merge the two tables based on the patent_id
+```{r, eval = FALSE}
+# Create a new table by merging the existing tables through the commnon column "patent_id"
+comb_patent_mainclass_tbl <- org_pat_tbl_copy %>%
+  left_join(uspc_pat_main_id_tbl, by = "patent_id")
+
+# filter out those companies that do not have a mainclass_id assigned
+comb_patent_mainclass_tbl <- comb_patent_mainclass_tbl[!is.na(mainclass_id), 
+                                                       .(mainclass_id), by = organization]
+
+```
+
+We can refer to the first part of the challenge and only select the companies among the top 10 companies in total number of patents.
+
+```{r, eval = FALSE}
+library(tidyr)
+# We gather the top 10 companies in total number of patents from part one of the challenge
+top_10_pat_org_copy <- top_10_pat_org[,.(organization)]
+
+# we now merge this table above with the mainclass table and filter out the na values. This is done by using the key method. We then count the number of times a given patent mainclass_id appeared in these top 10 companies.
+
+setkey(comb_patent_mainclass_tbl, organization)
+setkey(top_10_pat_org_copy, organization)
+
+top_10_main_id <- comb_patent_mainclass_tbl[top_10_pat_org_copy, on = "organization"][ , .N, by = mainclass_id
+][
+  order(N, decreasing = TRUE)
+][
+  1:5, .(`Top 5 USPTO Main Class among the Top 10 Companies` = mainclass_id, `Number of Patents of this Class` = N)
+]
+
+write_rds(top_10_main_id, "top_10_mainclass.rds")
+```
+
+We print the results showing the top 5 main classes Ids from the top 10 companies in the world based on number of patents issued.
+```{r, eval = TRUE}
+read_rds("top_10_mainclass.rds")
+```
+
+
+# Challenge 5 - Data Visualization
+
+```{r, eval = TRUE}
+
 ```
