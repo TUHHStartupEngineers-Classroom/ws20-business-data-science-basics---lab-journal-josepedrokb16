@@ -523,7 +523,7 @@ top_10_main_id <- comb_patent_mainclass_tbl[top_10_pat_org_copy, on = "organizat
 ][
   order(N, decreasing = TRUE)
 ][
-  1:5, .(`Top 5 USPTO Main Class among the Top 10 Companies` = mainclass_id, `Number of Patents of this Class` = N)
+  1:5, .(`Top 5 Classes` = mainclass_id, `Number of Patents` = N)
 ]
 
 write_rds(top_10_main_id, "top_10_mainclass.rds")
