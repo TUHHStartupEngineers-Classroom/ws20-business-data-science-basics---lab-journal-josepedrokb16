@@ -531,7 +531,8 @@ write_rds(top_10_main_id, "top_10_mainclass.rds")
 
 We print the results showing the top 5 main classes Ids from the top 10 companies in the world based on number of patents issued.
 ```{r, eval = TRUE}
-read_rds("top_10_mainclass.rds")
+print(read_rds("top_10_mainclass.rds"))
+
 ```
 
 
