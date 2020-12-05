@@ -16,55 +16,8 @@ output:
 knitr::opts_chunk$set(message=FALSE,warning=FALSE, cache=TRUE)
 ```
 
-**IMPORTANT:** You can delete everything in here and start fresh. You might want to start by not deleting anything above this line until you know what that stuff is doing.
 
-This is an `.Rmd` file. It is plain text with special features. Any time you write just like this, it will be compiled to normal text in the website. If you put a \# in front of your text, it will create a top level-header.
-
-# My first post
-
-Last compiled: `r Sys.Date()`
-
-Notice that whatever you define as a top level header, automatically gets put into the table of contents bar on the left. 
-
-## Second level header
-
-You can add more headers by adding more hashtags. These won't be put into the table of contents
-
-### third level header
-
-Here's an even lower level header
-
-# My second post (note the order)
-
-Last compiled: `r Sys.Date()`
-
-I'm writing this tutorial going from the top down. And, this is how it will be printed. So, notice the second post is second in the list. If you want your most recent post to be at the top, then make a new post starting at the top. If you want the oldest first, do, then keep adding to the bottom
-
-# Adding R stuff
-
-So far this is just a blog where you can write in plain text and serve your writing to a webpage. One of the main purposes of this lab journal is to record your progress learning R. The reason I am asking you to use this process is because you can both make a website, and a lab journal, and learn R all in R-studio. This makes everything really convenient and in the same place. 
-
-So, let's say you are learning how to make a histogram in R. For example, maybe you want to sample 100 numbers from a normal distribution with mean = 0, and standard deviation = 1, and then you want to plot a histogram. You can do this right here by using an r code block, like this:
-
-```{r}
-samples <- rnorm(100, mean=0, sd=1)
-hist(samples)
-```
-
-When you knit this R Markdown document, you will see that the histogram is printed to the page, along with the R code. This document can be set up to hide the R code in the webpage, just delete the comment (hashtag) from the cold folding option in the yaml header up top. For purposes of letting yourself see the code, and me see the code, best to keep it the way that it is. You'll learn that all of these things and more can be customized in each R code block.
-
-
-```{r, eval = TRUE}
-numbers <- 1:1000
-
-# This will print the first 10 elements of the vector numbers
-numbers[1:10]
-
-# This will plot a histogram of 100 random elements of the vector numbers
-hist(sample(numbers, 100, replace = T))
-```
-
-# Challenge 2 - Intro to the tidyverse
+# Challenge - Intro to the tidyverse
 
 ## Business Case and Challenge
 
@@ -92,7 +45,7 @@ bikeshops <- read_excel(path = "DS_101/00_data/01_bike_sales/01_raw_data/bikesho
 The next step is to combine all of the tables into one concise table
 ```{r, eval = TRUE}
 bike_orderlines_joined_tbl <- left_join(orderlines_tbl, bikes_tbl, by = c("product.id"="bike.id")) %>% left_join(bikeshops, by = c("customer.id" = "bikeshop.id"))
-glimpse(bike_orderlines_joined_tbl)
+bike_orderlines_joined_tbl
 ```
 
 We now organize the data in the table to give us better insights
@@ -110,7 +63,7 @@ bike_orderlines_wrangled_tbl <- bike_orderlines_joined_tbl %>%
   select(order.id, contains("order"), contains("model"), contains("category"), price, quantity, total.price, everything()) %>%
   rename(bikeshop = name) %>%
   set_names(names(.) %>% str_replace_all("\\.","_"))
-glimpse(bike_orderlines_wrangled_tbl)
+bike_orderlines_wrangled_tbl
 ```
 
 Now we have to separate the location column into city and State
@@ -189,7 +142,7 @@ sales_by_location_year_tbl %>%
   theme(axis.text.x = element_text(angle=45, hjust = 1))
 ```
 
-# Challenge 3 Data Acquisition
+# Challenge - Data Acquisition
 
 ## Getting Data from an Arbitrary API
 
@@ -295,7 +248,7 @@ rose_bike <- rose_bike_models %>% left_join(rose_bike_MTB_price)
 rose_bike
 ```
 
-# Challenge 4 - Data Wrangling
+# Challenge - Data Wrangling
 
 ## Part 1 - Patent Dominance
 What US company / corporation has the most patents? List the 10 US companies with the most assigned/granted patents.
@@ -536,8 +489,152 @@ print(read_rds("top_10_mainclass.rds"))
 ```
 
 
-# Challenge 5 - Data Visualization
+# Challenge - Data Visualization
+
+We will deal with the Covid-19  data and use tidyverse to wrangle the data.
+
 
 ```{r, eval = TRUE}
+# Let's first load the libraries and the dataset
+library(tidyverse)
+covid_data_tbl <- read_csv("https://opendata.ecdc.europa.eu/covid19/casedistribution/csv")
 
 ```
+
+## Part 1 
+
+The goal is to map the time course of the cumulative Covid-19 cases.
+
+```{r, eval = TRUE}
+# Let's first filter out the countries that are relevant for this analysis
+
+covid_analysis <- covid_data_tbl %>% 
+  
+  select(dateRep, cases, countriesAndTerritories) %>%
+  filter(countriesAndTerritories %in% c("Germany", "United_Kingdom", "France", "Spain", "United_States_of_America")) %>%
+
+# We now order the rows based on country and date, and create a new column containing the cumulative sum of the cases for each country
+  
+  group_by(countriesAndTerritories) %>%
+  mutate(date = dmy(dateRep)) %>%
+  arrange(countriesAndTerritories, date) %>%
+
+  mutate(Cumulative_Sum = cumsum(cases)) %>%
+  filter(year(date) == 2020) %>%
+  mutate(month = month(date, label = TRUE)) %>% 
+  mutate(sum_format = scales::dollar(Cumulative_Sum, big.mark = ".",
+                                     decimal.mark    = ",",
+                                     prefix          = ""))
+
+
+
+# The Next Step is to begin visualizing the date
+
+covid_analysis %>%
+  
+  # We determine the X and Y axis, as well as differentiatte the different curves by country
+  
+  ggplot(aes(date, Cumulative_Sum, color = countriesAndTerritories)) +
+  
+  geom_line(aes(color = countriesAndTerritories), size = 1) +
+  
+  # We adjust the X axis to show only the months in 2020. We also make the notation in the Y axis easier to read.
+
+  scale_x_date(date_breaks = "1 month", date_labels = "%b") +
+
+
+  scale_y_continuous(labels = scales::dollar_format(scale = 1e-6,
+                                                      prefix = "",
+                                                      suffix = " M"), breaks = seq(0,15e6, by = 2.5e6)) +
+
+
+  # We create a label on the last data point for the United States Curve, as shown in the challenge objective
+  
+geom_label(data = filter(covid_analysis, Cumulative_Sum ==last(Cumulative_Sum), countriesAndTerritories %in% "United_States_of_America"), aes(label = sum_format, fill = countriesAndTerritories), hjust = "inward",
+               size  = 3,
+               color = RColorBrewer::brewer.pal(n = 11, name = "RdBu")[11], show.legend = FALSE) +
+
+  # We write all of the titles of the axis
+labs(
+      title = "COVID-19 Confirmed Cases Worldwide",
+      x = "Year 2020",
+      y = "Cumulative Cases"
+
+    ) +
+
+  # We change the default coloring and position of the legend
+theme_economist() +
+
+theme(
+      axis.text.x = element_text(angle = 45, hjust = -1),
+      plot.title = element_text(face = "bold"),
+      plot.caption = element_text(face = "bold.italic"),
+      legend.position = "bottom",
+      legend.direction = "vertical") +
+
+scale_color_viridis_d(option = "D")
+
+  
+```
+
+## Part 2
+
+We want now to visualize the mortality rate (deaths / population).
+
+```{r, eval = TRUE}
+# We access the longitudinal and lateral data
+
+world <- map_data("world")
+
+# We now adjust the current table so that the countries all have the same name
+
+covid_map <- covid_data_tbl%>%
+   mutate(across(countriesAndTerritories, str_replace_all, "_", " ")) %>%
+   mutate(countriesAndTerritories = case_when(
+
+    countriesAndTerritories == "United Kingdom" ~ "UK",
+    countriesAndTerritories == "United States of America" ~ "USA",
+    countriesAndTerritories == "Czechia" ~ "Czech Republic",
+    TRUE ~ countriesAndTerritories
+
+  )) %>%
+  
+  # We select the important columns, and create a new column containing the death rate per population
+  mutate(region = countriesAndTerritories) %>%
+  select(region, deaths, popData2019) %>%
+  group_by(region) %>%
+  summarise(deathRate = sum(deaths)/popData2019) %>%
+  distinct(region, .keep_all = TRUE) %>%
+  mutate(death_rate_formatted = scales::percent(deathRate, accuracy = 0.001 ))
+
+# Now we can join the two table
+
+covid_map <- covid_map %>%
+  left_join(world, by = "region") %>%
+  distinct(region, .keep_all = TRUE) %>%
+  mutate(`Mortality Rate` = deathRate)
+
+# We now put the this data into the map argument of geom_map()
+
+covid_map %>% ggplot() + 
+  geom_map(aes(x = long, y = lat, map_id = region, fill = `Mortality Rate`, label = death_rate_formatted), map = world) +
+  
+  # We now do the formatting so that it looks nice
+
+  theme_minimal() + 
+  
+  # Writing the labels
+  labs(
+    
+    title = "Confirmed COVID-19 deaths relative to the size of the population",
+    subtitle = "More than 1.2 Million confirmed Covid-19 deaths worldwide",
+    x = "",
+    y = "",
+    caption = "Date: 05/12/2020"
+  ) + 
+  
+  # changing the legend colors, and format to percentage style
+  scale_fill_continuous(labels = scales::percent_format(accuracy = 0.001), low = "#a52a2a", high = "black") 
+
+```
+
